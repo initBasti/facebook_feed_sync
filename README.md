@@ -1,14 +1,40 @@
-# gosh_sync
+# fb_feed_sync
 Update a google sheet with data from Plentymarkets for a Facebook data feed.
 
 ## Requirements:
 
-- Create a Elastic Export format on Plentymarkets:  
+- Create FormatDesigner format/s on Plentymarkets:  
+    [**Stock Export**]
     + Data -> FormatDesigner -> add format:  
         Type: item  
     + Assign mandatory fields:  
         Variation.number  
         VariationStock.physicalStock.{Name of Warehouse}  
+
+    [**Color & Size upload**]
+    + Data -> FormatDesigner -> add format:  
+        Type: item  
+    + Assign mandatory fields:  
+        Variation.number  
+        VariationAttributeValues.attributeValues  
+
+    [**Price upload**]
+    + Data -> FormatDesigner -> add format:  
+        Type: item  
+    + Assign mandatory fields:  
+        Variation.number  
+        VariationSalesPrice.price  
+        (Assign the price, that you use on your webshop [Arrow To Box Button on the right])  
+
+    [**Text upload**]
+    + Data -> FormatDesigner -> add format:  
+        Type: item  
+    + Assign mandatory fields:  
+        Variation.number  
+        ItemDescription.Webshopname  
+        ItemDescription.description  
+
+- Create ElasticExport formats for the FormatDesigner formats:  
     + Data -> ElasticExport -> new Export:  
         Type: Item  
         Limit: 99999  

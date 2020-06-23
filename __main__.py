@@ -1,159 +1,118 @@
+"""
+    Author: Sebastian Fricke
+    Date: 2020-06-17
+    License: GPLv3
+
+    Synchronize specific columns of a google sheet with data from a
+    plentymarkets elastic export. The google sheet is then used as
+    a data feed for a facebook product catalog.
+"""
 import configparser
 import argparse
-import pandas
-import pickle
+import os
 import os.path
-from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
+import sys
+from datetime import datetime
 
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+from packages import google_sheet, compare, mappings
 
-def get_google_credentials():
+def clean_log_folder():
+    log_files = []
+    for files in os.walk(os.path.join(os.getcwd(), 'log')):
+        log_files = files[2]
+
+    for log in log_files:
+        try:
+            log_date = datetime.strptime(log, "%d-%M-%Y.log")
+        except ValueError:
+            continue
+        if log_date < datetime.now():
+            os.remove(os.path.join(os.getcwd(), 'log', log))
+
+def record_changes(frame, key):
     """
-        Check if the token.pickle file contains valid credentials
-        if that is not the case get them manually.
-        TODO: find method for cronjob to notify administrator about
-        problem.
-
-        Return:
-            [Google Sheet credentials]
-    """
-    creds = None
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                '.credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
-
-    return creds
-
-def read_google_sheet(creds, sheet_id, sheet_range):
-    """
-        Open the sheet with the @sheet_id, check if the column names
-        are as expected, pull the data and transform to pandas dataframe.
+        Enter the performed changes by `write_google_sheet` into a log file.
 
         Parameter:
-            creds [Google Sheet credentials]
-            sheet_id [String] : Identification of the google sheet
-            sheet_range [String] : ColumnRow combination, specifies the area of
-                                   values (exp: A1:E2 -> A1, A2, B1 .. E1, E2)
-
-        Return:
-            [DataFrame] : containing ID(SKU) and storage amount
+            frame [DataFrame] - pandas dataframe containing the inventory
+                                of source and target
     """
-    service = build('sheets', 'v4', credentials=creds)
-    sheet_list = []
-    row_count = 0
+    if not os.path.exists('./log'):
+        os.mkdir('./log')
+    today = datetime.now().strftime('%d-%m-%Y')
+    log_file = os.path.join(os.getcwd(), 'log', today + '.log')
 
-    sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=sheet_id,
-                                range=sheet_range).execute()
-    values = result.get('values', [])
+    with open(log_file, mode='a') as item:
+        now = datetime.now().strftime("%H:%M")
+        item.write(str(f"Summary [{now}] sync:{key}:\n"))
+        gen = frame.iterrows()
 
-    if not values:
-        print('No data found')
-    else:
-        for row in values:
-            if row_count == 0:
-                if not row[0] == 'id' or not row[4] == 'inventory':
-                    print('Wrong data format. ')
-                    print("requires: 'A' == 'id', 'E' == 'inventory'")
-                    print(f"actual: 'A' == {row[0]}, 'E' == {row[4]}")
-                    return pandas.DataFrame()
+        for row in gen:
+            if key == 'description':
+                try:
+                    item.write(str("{0}. {1}... -> {2}...\n"
+                                   .format(row[1]['Sku'],
+                                           row[1]['FB_'+key][:40],
+                                           row[1]['P_'+key][:40])))
+                except TypeError:
+                    item.write(str("{0}. {1}... -> {2}...\n"
+                                   .format(row[1]['Sku'], row[1]['FB_'+key],
+                                           row[1]['P_'+key])))
             else:
-                if not row[0]:
-                    continue
-                sheet_list.append([row[0], row[4]])
-            row_count += 1
+                item.write(str("{0}.{1} -> {2}\n"
+                               .format(row[1]['Sku'], row[1]['FB_' + key],
+                                       row[1]['P_' + key])))
 
-    return pandas.DataFrame(sheet_list, columns=['Sku', 'Inventory'])
+def setup_stock_sync():
+    config_key = 'inventory_plenty_url'
+    sync_key = 'inventory'
+    return [config_key, sync_key]
 
-def write_google_sheet(sheet_range):
+def setup_price_sync():
+    config_key = 'price_plenty_url'
+    sync_key = 'price'
+    return [config_key, sync_key]
+
+def setup_text_sync():
+    config_key = 'text_plenty_url'
+    sync_key = 'text'
+    return [config_key, sync_key]
+
+def setup_attr_sync():
+    config_key = 'attr_plenty_url'
+    sync_key = 'attr'
+    return [config_key, sync_key]
+
+def setup_argparser():
     """
-        Enter a specific value to column:row coordinate.
-
-        Parameter:
-            sheet_range [String] : ColumnRow combination, specifies the area of
-                                   values (exp: A1:E2 -> A1, A2, B1 .. E1, E2)
+        Setup the parser for the different sub-commands.
 
         Return:
-            [Bool] True success / False failure
+            [Argparse Object]
     """
+    parser = argparse.ArgumentParser(prog='fb_feed_sync')
+    subparser = parser.add_subparsers(
+        title="sync options",
+        description="read the README, which contains the requirments")
 
-def export_header_check(frame, sku_column, stock_column):
-    """
-        Check if the file contains the required column names.
-        Detect any typo within the config 'plenty_warehouse' entry.
+    stock = subparser.add_parser('inventory',
+                                 help='inventory sync plenty->facebook')
+    stock.set_defaults(func=setup_stock_sync)
+    price = subparser.add_parser('price', help='price sync plenty->facebook')
+    price.set_defaults(func=setup_price_sync)
+    attr = subparser.add_parser('attribute',
+                                help='initial upload of attributes')
+    attr.set_defaults(func=setup_attr_sync)
+    text = subparser.add_parser('text', help='sync of title & description')
+    text.set_defaults(func=setup_text_sync)
 
-        Parameter:
-            frame [DataFrame]
-            sku_column [String] : Name of the sku_column
-            stock_column [String] : Name of the stock_column
-
-        Return:
-            True/False
-    """
-    if not frame.columns[frame.columns.str.contains(pat=sku_column)]:
-        return False
-    if not frame.columns[frame.columns.str.contains(pat=stock_column)]:
-        similar = frame.filter(regex='VariationStock.physicalStock').columns
-        if similar:
-            print("No column found for warehouse: {0}, did you mean: {1}?"
-                  .format(warehouse,
-                          similar.replace('VariationStock.physicalStock',
-                                          '', 1)))
-        else:
-            print("File requires a physicalStock column, see README.md")
-        return False
-    return True
-
-def read_plenty_export(url, warehouse):
-    """
-        Download storage amount data from a pre-configured Elastic Export
-        format (HTTP). Read the data into a pandas dataframe.
-
-        Parameter:
-            url [String] : http url to the specified file
-
-        Return:
-            [DataFrame] : containing ID(SKU) and storage amount
-    """
-    frame = pandas.read_csv(url, sep=';')
-
-    sku_column = 'Variation.number'
-    stock_column = 'VariationStock.physicalStock.' + warehouse
-    if not export_header_check(frame=frame, sku_column=sku_column,
-                               stock_column=stock_column):
-        return pandas.DataFrame()
-
-
-
-def clean_numeric_value(series):
-    """
-        Remove any unwanted separators and transform to a integer.
-
-        Parameter:
-            series [Series] : Pandas series of values to be cleaned
-
-        Return:
-            [Series] : series with clean values
-    """
+    return parser
 
 def main():
     """
         Functionality:
-            Download the data from Plentymarkets by accessing the pre-configured
-            Elastic Export HTTP URL
+            Download the data from Plentymarkets by accessing the
+            pre-configured Elastic Export HTTP URL
 
             Read in the google sheet.
 
@@ -170,26 +129,46 @@ def main():
 
     """
     creds = None
-    url = str()
 
-    config = configparser.ConfigParser().read('config.ini')
+    export_link = ''
+    synctype = []
 
-    if config['General']['google_sheet_rows']:
-        sheet_range = 'A1:E' + config['General']['google_sheet_rows']
-    else:
-        sheet_range = 'A1:E20'
-        print("No specified amount of rows to read, default to range: {0}"
-              .format(sheet_range))
-        print("Check the config.ini file to adjust the range")
+    parser = setup_argparser()
+    export_link, synctype = parser.parse_args().func()
 
-    creds = get_google_credentials()
+    if not export_link or not synctype:
+        print("Specify the sync type: [stock, price, text, attr].")
+        sys.exit(0)
 
-    g_df = read_google_sheet(
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+
+    clean_log_folder()
+
+    creds = google_sheet.get_google_credentials()
+
+    g_df = google_sheet.read_google_sheet(
         creds=creds, sheet_id=config['General']['google_sheet_id'],
-        sheet_range=sheet_range)
+        max_row=config['General']['google_sheet_rows'],
+        synctype=synctype)
 
-    p_df = read_plenty_export(url=config['General']['plenty_url'],
-                              warehouse=config['General']['plenty_warehouse'])
+    p_df = compare.read_plenty_export(
+        url=config['General'][export_link], synctype=synctype,
+        warehouse=config['General']['plenty_warehouse'])
+
+
+    difference = compare.detect_differences(google=g_df, plenty=p_df,
+                                            synctype=synctype)
+
+    if len(difference.index) == 0:
+        sys.exit(0)
+
+    for key, column in zip(mappings.sync_to_gsheet_map[synctype],
+                           mappings.sync_to_gsheet_range_map[synctype]):
+        if (google_sheet.write_google_sheet(
+                creds=creds, sheet_id=config['General']['google_sheet_id'],
+                frame=difference, key=key, column=column)):
+            record_changes(frame=difference, key=key)
 
 if __name__ == '__main__':
     main()
