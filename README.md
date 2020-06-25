@@ -48,3 +48,12 @@ Update a google sheet with data from Plentymarkets for a Facebook data feed.
     + Example URL: `https://docs.google.com/spreadsheets/d/`**{SHEET ID}**`/edit?pli=1#gid=0`  
       Insert into the config.ini file.  
 - Specify the number of rows to be read @ config.ini => General => google_sheet_rows  
+- Specify the folder for log files @ config.ini => General => log_path
+
+## Installation:
+
+- Place the credentials file from : [Google Sheet API](https://developers.google.com/sheets/api/quickstart/python) as **'.credentials.json'** (example: mv ~/Downloads/credentials.json /folder/to/fb_feed_sync/data/.credentials.json) into the data folder. (The **.** is important)
+- Place the `config.ini` file into the data folder aswell.
+- run: `sudo python3 setup.py install`
+- Make an initial setup of the credentials with: **sudo** `python3 -m fb_feed_sync inventory` (you can use any sub command here: inventory/price/text/attribute, as all require authentication)
+- Test all different commands to see if they work with your sheet.
