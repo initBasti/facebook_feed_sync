@@ -1,7 +1,7 @@
 import os
 import datetime
 
-def update_log(error):
+def update_log(error, log_folder):
     """
         Report errors that occured while running the script
 

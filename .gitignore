@@ -129,7 +129,7 @@ dmypy.json
 .pyre/
 
 # Custom
-.credentials.json
-config.ini
-token.pickle
+data/.credentials.json
+data/config.ini
+data/token.pickle
 /Tests

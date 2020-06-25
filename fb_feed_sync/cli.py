@@ -14,11 +14,23 @@ import os.path
 import sys
 from datetime import datetime
 
-from packages import google_sheet, compare, mappings
+from fb_feed_sync.packages import google_sheet, compare, mappings, log
 
-def clean_log_folder():
+DATA_DIR = os.path.join('/usr', 'local', 'data')
+CONFIG_PATH = os.path.join(DATA_DIR, 'config.ini')
+
+def clean_log_folder(log_folder):
+    '''
+        Remove all change record from the previous day.
+
+        parameter:
+            log_folder [String] : Location specified in the configuration
+    '''
     log_files = []
-    for files in os.walk(os.path.join(os.getcwd(), 'log')):
+
+    if not log_folder:
+        return
+    for files in os.walk(log_folder):
         log_files = files[2]
 
     for log in log_files:
@@ -27,9 +39,9 @@ def clean_log_folder():
         except ValueError:
             continue
         if log_date < datetime.now():
-            os.remove(os.path.join(os.getcwd(), 'log', log))
+            os.remove(os.path.join(log_folder, log))
 
-def record_changes(frame, key):
+def record_changes(frame, key, log_folder):
     """
         Enter the performed changes by `write_google_sheet` into a log file.
 
@@ -37,10 +49,12 @@ def record_changes(frame, key):
             frame [DataFrame] - pandas dataframe containing the inventory
                                 of source and target
     """
-    if not os.path.exists('./log'):
-        os.mkdir('./log')
+    if not log_folder:
+        return
+    if not os.path.exists(log_folder):
+        os.mkdir(log_folder)
     today = datetime.now().strftime('%d-%m-%Y')
-    log_file = os.path.join(os.getcwd(), 'log', today + '.log')
+    log_file = os.path.join(log_folder, today + '.log')
 
     with open(log_file, mode='a') as item:
         now = datetime.now().strftime("%H:%M")
@@ -141,9 +155,10 @@ def main():
         sys.exit(0)
 
     config = configparser.ConfigParser()
-    config.read('config.ini')
+    config.read(CONFIG_PATH)
 
-    clean_log_folder()
+    clean_log_folder(log_folder=config['General']['log-path'])
+    mappings.log_location = config['General']['log-path']
 
     creds = google_sheet.get_google_credentials()
 
@@ -151,10 +166,20 @@ def main():
         creds=creds, sheet_id=config['General']['google_sheet_id'],
         max_row=config['General']['google_sheet_rows'],
         synctype=synctype)
+    if len(g_df.index) == 0:
+        log.update_log(
+            error=str('Empty google data from sheet: {0}'
+                      .format(config['General']['google_sheet_id']),
+            log_folder=config['General']['log_path']))
 
     p_df = compare.read_plenty_export(
         url=config['General'][export_link], synctype=synctype,
         warehouse=config['General']['plenty_warehouse'])
+    if len(p_df.index) == 0:
+        log.update_log(
+            error=str('Empty plentymarkets export data from URL: {0}'
+                      .format(config['General'][export_link]),
+            log_folder=config['General']['log_path']))
 
 
     difference = compare.detect_differences(google=g_df, plenty=p_df,
@@ -168,7 +193,5 @@ def main():
         if (google_sheet.write_google_sheet(
                 creds=creds, sheet_id=config['General']['google_sheet_id'],
                 frame=difference, key=key, column=column)):
-            record_changes(frame=difference, key=key)
-
-if __name__ == '__main__':
-    main()
+            record_changes(frame=difference, key=key,
+                           log_folder=config['General']['log-path'])

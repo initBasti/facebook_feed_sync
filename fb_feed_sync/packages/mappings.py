@@ -26,3 +26,5 @@ sync_to_gsheet_index_map = {
     'text':[1,2],
     'attr':[15,16]
 }
+
+log_location = ''

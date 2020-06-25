@@ -11,7 +11,7 @@ import difflib
 import pandas
 import numpy as np
 
-from packages import mappings
+from fb_feed_sync.packages import mappings
 
 def get_attribute(value, value_type):
     """

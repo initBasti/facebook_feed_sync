@@ -14,10 +14,20 @@ from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
-from packages import log
-from packages import mappings
+from fb_feed_sync.packages import log
+from fb_feed_sync.packages import mappings
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+
+DATA_DIR = os.path.join('/usr', 'local', 'data')
+if not os.path.exists(DATA_DIR):
+    print("Install script has setup a different data folder.")
+CREDENTIAL_PATH = os.path.join(DATA_DIR, '.credentials.json')
+TOKEN_PATH = os.path.join(DATA_DIR, 'token.pickle')
+if not os.path.exists(CREDENTIAL_PATH):
+    print('''Missing credentials file, see:
+          (https://developers.google.com/sheets/api/quickstart/python)
+          Step 1''')
 
 def find_valid_rows(data):
     """
@@ -108,8 +118,8 @@ def get_google_credentials():
             [Google Sheet credentials]
     """
     creds = None
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
+    if os.path.exists(TOKEN_PATH):
+        with open(TOKEN_PATH, 'rb') as token:
             creds = pickle.load(token)
 
     if not creds or not creds.valid:
@@ -117,11 +127,17 @@ def get_google_credentials():
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                '.credentials.json', SCOPES)
+                CREDENTIAL_PATH, SCOPES)
             creds = flow.run_local_server(port=0)
 
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
+        try:
+            with open(TOKEN_PATH, 'wb') as token:
+                pickle.dump(creds, token)
+        except PermissionError as err:
+            msg = '''Initial setup needs root permissions (sudo ..)'''
+            print(msg)
+            log.update_log(error=str(f"{msg}\n{err}"),
+                           log_folder=mappings.log_location)
 
     return creds
 
@@ -162,7 +178,9 @@ def read_google_sheet(creds, sheet_id, max_row, synctype):
                                      ranges=sheet_range).execute()
     ranges = result['valueRanges']
     if not ranges:
-        print('No data found')
+        msg = 'No data found'
+        print(msg)
+        log.update_log(error=msg, log_folder=mappings.log_location)
 
     indeces = find_valid_rows(data=ranges)
     if not indeces:
@@ -226,7 +244,9 @@ def write_google_sheet(creds, sheet_id, frame, key, column):
         try:
             range_name = column + str(item[1]['FB_index']+1)
         except KeyError:
-            print(f"Invalid key for write_google_sheet: {key}")
+            msg = str(f"Invalid key for write_google_sheet: {key}")
+            print(msg)
+            log.update_log(error=msg, log_folder=mappings.log_location)
             return False
         values = [[str(item[1]['P_' + key]).replace(str(np.nan), '')]]
         data.append(dict(zip(data_cols, [range_name, values])))
