@@ -148,7 +148,10 @@ def main():
     synctype = []
 
     parser = setup_argparser()
-    export_link, synctype = parser.parse_args().func()
+    try:
+        export_link, synctype = parser.parse_args().func()
+    except AttributeError:
+        print("No sync type specified, see fb_feed_sync --help")
 
     if not export_link or not synctype:
         print("Specify the sync type: [stock, price, text, attr].")
