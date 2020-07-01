@@ -23,7 +23,7 @@ with open("README.md", mode='r') as f:
 
 setup(
     name='fb_feed_sync',
-    version='1.0',
+    version='1.1',
     description='Synchronize data to a google sheet from a plenty export',
     license='GPLv3',
     long_description=long_description,
@@ -48,6 +48,6 @@ setup(
     ],
     entry_points={'script':['fb_feed_sync = fb_feed_sync.__main__:main']},
     data_files=[('data', ['data/.credentials.json', 'data/config.ini'])],
-    include_pacakage_data = True,
+    include_package_data = True,
     cmdclass={'install':OverrideInstall}
 )
