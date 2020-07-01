@@ -13,6 +13,9 @@ import numpy as np
 
 from fb_feed_sync.packages import mappings
 
+# silence the confusing warning about chained assignments for lines 106-110
+pandas.options.mode.chained_assignment = None
+
 def get_attribute(value, value_type):
     """
         Find the value_type inside of the string and return it's value.
@@ -103,8 +106,9 @@ def read_plenty_export(url, synctype, warehouse):
         try:
             subset = subset.astype({'Sku':object, 'P_'+synctype:int})
         except ValueError:
-            subset['P_'+synctype] = subset['P_'+synctype]\
-                .apply(lambda x: x.replace('.0', ''))
+            # in case of NAN values replace those before the conversion
+            subset['P_' + synctype].fillna('0', inplace=True)
+            subset = subset.astype({'Sku':object, 'P_'+synctype:int})
     else:
         for column in column_names:
             subset.astype({'P_'+column:object})
