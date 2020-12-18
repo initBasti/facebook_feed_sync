@@ -18,7 +18,7 @@ def create_cronjob(sync):
     job = []
     interval = enter_interval()
     for s in sync:
-        command = str(f'python3 -m fb_feed_sync {s}')
+        command = str(f'python3 -m facebook_feed_sync {s}')
         job.append(
             cron.new(command=command).minute.every(interval))
     cron.write()
