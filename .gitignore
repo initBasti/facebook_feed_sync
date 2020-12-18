@@ -136,3 +136,6 @@ data/token.pickle
 /backup_data
 prepare_data_folder_for_prod.sh
 prepare_data_folder_for_dist.sh
+
+# Vim
+*.session
