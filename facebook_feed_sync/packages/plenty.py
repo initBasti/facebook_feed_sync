@@ -80,7 +80,7 @@ class ColumnValuesFiller():
     def inventory_value(self) -> list:
         if not self.inventory:
             self.inventory = self.get_inventory_values()
-        return self.inventory
+        return ['0' if int(x) < 0 else x for x in self.inventory]
 
     def availability_value(self) -> list:
         if not self.inventory:
