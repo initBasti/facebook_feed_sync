@@ -278,4 +278,4 @@ def cli():
         verbose("Write the changes to the google-sheet.")
         gsheet.gsheet_write(worksheet=worksheet, dataframe=google)
         verbose("Resize the google-sheet to it's current size.")
-        worksheet.resize(rows=len(google.index))
+        worksheet.resize(rows=len(google.index)+1)
