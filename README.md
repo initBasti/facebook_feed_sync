@@ -60,4 +60,8 @@ main_warehouse=
 15. Make an initial setup of the sheet with: `python3 -m facebook_feed_sync -t all`
 16. Check if the google sheet looks good and go on **Share** at the top right and change access rights to anyone with the link
 17. Go to your business manager (catalogs) [https://business.facebook.com/products/catalogs/](https://business.facebook.com/products/catalogs/), create a new datafeed: Catalog -> data-feeds -> Add products -> Use bulk upload -> Google Spreadsheets -> Next -> Insert the full link -> Choose the upload schedule.
-18. Setup the cronjob to run the script preferably on a device, which has a constant uptime (I use a raspberry Pi for example)
+18. Setup the cronjob to run the script preferably on a device, which has a constant uptime (I use a raspberry Pi for example), **Notice** cronjobs don't go well with the Keyring authentication, so please provide the credentials within the configuration like this:
+    + Write the PlentyMarkets REST-API password into an empty file
+    + encrypt it `gpg --output test_file.gpg --encrypt --recipient {YOUR_GPG_RECIPIENT} test_file.txt`
+    + Add the PlentyMarkets REST-API username to the config under the section `[Credentials]` as option `user`
+    + Add the path to the GnuPG encrypted file to the config under the section `[Credentials]` as option `pw_file`
