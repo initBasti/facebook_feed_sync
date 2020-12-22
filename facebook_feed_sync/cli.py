@@ -115,7 +115,7 @@ def check_config(config: configparser.ConfigParser) -> bool:
             return False
         if section == 'General':
             options = ['google_sheet_id', 'plenty_api_url', 'lang']
-        else:
+        elif section == 'Mapping':
             options = ['facebook_referrer', 'image_match_criteria',
                        'item_name_number', 'gender_item_property',
                        'age_item_property', 'url_variation_property',
@@ -185,6 +185,26 @@ def get_config_values(config: configparser.ConfigParser) -> bool:
     return True
 
 
+def get_config_credentials(config: configparser.ConfigParser) -> dict:
+    """
+    Check if the optional credentials section is provided.
+
+    The section can contain two options:
+        + user - name of the REST API user for the PlentyMarkets API
+        + pw_file - path to GnuPG encrypted file containing the password
+                    for the REST API user
+    """
+    if not config.has_section(section='Credentials'):
+        return {}
+    if not config.has_option(section='Credentials', option='user'):
+        return {}
+    if not config.has_option(section='Credentials', option='pw_file'):
+        return {}
+
+    return {'user': config['Credentials']['user'],
+            'pw': config['Credentials']['pw_file']}
+
+
 def cli():
     parser = setup_argparser()
     verbose = logger.info if parser.verbose else lambda *a, **k: None
@@ -194,8 +214,23 @@ def cli():
     if not check_config(config=config):
         sys.exit(1)
 
-    api = plenty_api.PlentyApi(base_url=config['General']['plenty_api_url'],
-                               use_keyring=True, data_format='json')
+    direct_credentials = get_config_credentials(config=config)
+
+    if direct_credentials:
+        verbose("Use credentials from configuration.")
+        api = plenty_api.PlentyApi(
+            base_url=config['General']['plenty_api_url'],
+            use_keyring=True, data_format='json',
+            username=direct_credentials['user'],
+            password=direct_credentials['pw']
+        )
+
+    if not direct_credentials or not api.creds['Authorization']:
+        verbose("Use credentials from keyring.")
+        api = plenty_api.PlentyApi(
+            base_url=config['General']['plenty_api_url'],
+            use_keyring=True, data_format='json'
+        )
 
     if not get_config_values(config=config):
         logger.error("Invalid configuration.")
